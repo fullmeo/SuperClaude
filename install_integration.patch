@@ -1,0 +1,80 @@
+# Reference Validation Integration for install.sh
+# Add this function to install.sh (after line 170, before main logic)
+
+# ============================================================================
+# REFERENCE VALIDATION INTEGRATION
+# ============================================================================
+
+# Function: validate_configuration_references
+# Description: Validate all @include references in configuration files
+# Parameters: None
+# Returns: 0 if valid, 1 if errors found
+validate_configuration_references() {
+    local validator_script="./validate-references.sh"
+
+    if [[ ! -f "$validator_script" ]]; then
+        log_warning "Reference validator not found, skipping validation"
+        return 0
+    fi
+
+    if [[ ! -x "$validator_script" ]]; then
+        chmod +x "$validator_script"
+    fi
+
+    echo ""
+    echo -e "${BLUE}Validating configuration references...${NC}"
+
+    # Run validator with appropriate flags
+    local validator_opts=""
+    [[ "$VERBOSE" == true ]] && validator_opts="$validator_opts --verbose"
+    [[ "$DRY_RUN" == true ]] && validator_opts="$validator_opts --report"
+
+    if bash "$validator_script" $validator_opts; then
+        log_success "Configuration references validated successfully"
+        return 0
+    else
+        log_error "Configuration validation failed"
+
+        if [[ "$DRY_RUN" != true ]]; then
+            echo -e "${RED}Cannot proceed with installation.${NC}"
+            echo "Please fix the configuration errors above and try again."
+            echo ""
+            echo "To view detailed validation report:"
+            echo "  bash $validator_script --report"
+        fi
+
+        return 1
+    fi
+}
+
+# Function: should_skip_validation
+# Description: Check if validation should be skipped
+# Parameters: None
+# Returns: 0 if should skip, 1 if should validate
+should_skip_validation() {
+    # Check for --skip-validation flag (environment variable or config)
+    [[ "${SKIP_VALIDATION:-false}" == true ]] && return 0
+
+    # Force validation in CI/CD environments
+    [[ -n "${CI:-}" ]] && return 1
+    [[ -n "${GITHUB_ACTIONS:-}" ]] && return 1
+
+    return 1
+}
+
+# ============================================================================
+# END OF INTEGRATION CODE
+# ============================================================================
+
+# USAGE IN MAIN INSTALLATION FLOW:
+#
+# In the main() function, add this call BEFORE file installation:
+#
+#     # Step 1: Validate configuration
+#     if ! should_skip_validation; then
+#         validate_configuration_references || return 1
+#     fi
+#
+#     # Step 2: Proceed with installation
+#     ...rest of installation...
+#

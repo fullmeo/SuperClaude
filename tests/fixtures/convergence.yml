@@ -1,0 +1,37 @@
+# Convergence Pattern: Multiple paths converging to single task
+# A → (B, C) → D
+
+version: "1.0"
+description: "Diamond/convergence dependency pattern"
+
+tasks:
+  start:
+    description: "Start task"
+    commands:
+      - "/start"
+    timeout: 60
+
+  branch-left:
+    description: "Left branch"
+    commands:
+      - "/left"
+    depends-on:
+      - start
+    timeout: 60
+
+  branch-right:
+    description: "Right branch"
+    commands:
+      - "/right"
+    depends-on:
+      - start
+    timeout: 60
+
+  converge:
+    description: "Convergence task"
+    commands:
+      - "/converge"
+    depends-on:
+      - branch-left
+      - branch-right
+    timeout: 60

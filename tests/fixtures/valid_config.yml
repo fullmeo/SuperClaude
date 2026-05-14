@@ -1,0 +1,46 @@
+# Valid Configuration with Parallel Opportunities
+# Demonstrates parallel execution: analyze → (test1, test2, test3) → review
+
+version: "1.0"
+description: "Valid configuration with parallel tasks"
+
+tasks:
+  analyze-code:
+    description: "Analyze code quality"
+    commands:
+      - "/analyze --code"
+    timeout: 120
+
+  unit-test:
+    description: "Run unit tests"
+    commands:
+      - "/test --unit"
+    depends-on:
+      - analyze-code
+    timeout: 300
+
+  integration-test:
+    description: "Run integration tests"
+    commands:
+      - "/test --integration"
+    depends-on:
+      - analyze-code
+    timeout: 300
+
+  security-scan:
+    description: "Run security scan"
+    commands:
+      - "/scan --security"
+    depends-on:
+      - analyze-code
+    timeout: 180
+
+  quality-review:
+    description: "Review quality"
+    commands:
+      - "/review --quality"
+    depends-on:
+      - unit-test
+      - integration-test
+      - security-scan
+    timeout: 200

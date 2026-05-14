@@ -1,0 +1,86 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches:
+      - master
+      - develop
+      - main
+
+permissions:
+  pull-requests: write
+  checks: write
+  statuses: write
+
+jobs:
+  quality-checks:
+    name: Quality Gate Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check file changes
+        id: files
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            config:
+              - '.claude/**'
+              - 'CLAUDE.md'
+              - 'install.sh'
+            validator:
+              - 'validate-references.sh'
+              - 'test_validate_references.sh'
+
+      - name: Validate references (if config changed)
+        if: steps.files.outputs.config == 'true'
+        run: |
+          chmod +x validate-references.sh
+          bash validate-references.sh --report || exit 1
+
+      - name: Test validator (if validator changed)
+        if: steps.files.outputs.validator == 'true'
+        run: |
+          chmod +x test_validate_references.sh
+          chmod +x validate-references.sh
+          bash test_validate_references.sh || exit 1
+
+      - name: Check for merge conflicts
+        run: |
+          if grep -r "^<<<<<<< HEAD" . --include="*.yml" --include="*.md" --include="*.sh"; then
+            echo "❌ Merge conflicts detected"
+            exit 1
+          fi
+          echo "✓ No merge conflicts"
+
+      - name: Verify documentation updated
+        if: steps.files.outputs.config == 'true'
+        run: |
+          # Check if docs mention the changes
+          if git diff HEAD~1 CLAUDE.md | grep -q "^\+"; then
+            echo "✓ Documentation appears to be updated"
+          else
+            echo "⚠️  Consider updating documentation"
+          fi
+
+  branch-protection-status:
+    name: Branch Protection Status
+    runs-on: ubuntu-latest
+    needs: quality-checks
+    if: always()
+
+    steps:
+      - name: Status check passed
+        if: needs.quality-checks.result == 'success'
+        run: |
+          echo "✅ Quality gate passed - ready to merge"
+
+      - name: Status check failed
+        if: needs.quality-checks.result != 'success'
+        run: |
+          echo "❌ Quality gate failed - please fix issues"
+          exit 1

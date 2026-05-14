@@ -1,0 +1,28 @@
+# Missing Task Reference Test Fixture
+# References a task that doesn't exist
+
+version: "1.0"
+description: "Workflow with missing task reference"
+
+tasks:
+  analyze:
+    description: "Analyze code"
+    commands:
+      - "/analyze"
+    timeout: 60
+
+  review:
+    description: "Review code"
+    commands:
+      - "/review"
+    depends-on:
+      - analyze
+    timeout: 60
+
+  publish:
+    description: "Publish results"
+    commands:
+      - "/publish"
+    depends-on:
+      - nonexistent-task
+    timeout: 60

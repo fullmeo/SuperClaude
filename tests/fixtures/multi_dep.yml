@@ -1,0 +1,27 @@
+# Multi-Dependency Test
+# Task depending on multiple predecessors
+
+version: "1.0"
+description: "Task with multiple dependencies"
+
+tasks:
+  task-a:
+    description: "Task A"
+    commands:
+      - "/task-a"
+    timeout: 30
+
+  task-b:
+    description: "Task B"
+    commands:
+      - "/task-b"
+    timeout: 30
+
+  task-c:
+    description: "Task C"
+    commands:
+      - "/task-c"
+    depends-on:
+      - task-a
+      - task-b
+    timeout: 30

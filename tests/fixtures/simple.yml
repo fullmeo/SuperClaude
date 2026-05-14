@@ -1,0 +1,28 @@
+# Simple Linear Workflow for Testing
+# 3 tasks in sequence: A → B → C
+
+version: "1.0"
+description: "Simple sequential workflow"
+
+tasks:
+  analyze:
+    description: "Analyze code"
+    commands:
+      - "/analyze --code"
+    timeout: 60
+
+  review:
+    description: "Review code"
+    commands:
+      - "/review"
+    depends-on:
+      - analyze
+    timeout: 60
+
+  report:
+    description: "Generate report"
+    commands:
+      - "/report"
+    depends-on:
+      - review
+    timeout: 60

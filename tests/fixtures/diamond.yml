@@ -1,0 +1,37 @@
+# Diamond Dependency Pattern
+# A → (B, C) → D (classic diamond shape)
+
+version: "1.0"
+description: "Diamond dependency pattern"
+
+tasks:
+  init:
+    description: "Initialize"
+    commands:
+      - "/init"
+    timeout: 30
+
+  step-b:
+    description: "Step B"
+    commands:
+      - "/step-b"
+    depends-on:
+      - init
+    timeout: 30
+
+  step-c:
+    description: "Step C"
+    commands:
+      - "/step-c"
+    depends-on:
+      - init
+    timeout: 30
+
+  final:
+    description: "Final step"
+    commands:
+      - "/final"
+    depends-on:
+      - step-b
+      - step-c
+    timeout: 30

@@ -1,0 +1,27 @@
+# Circular Dependency Test Fixture
+# Tests cycle detection: A → B → C → A
+
+version: "1.0"
+description: "Workflow with circular dependency"
+
+tasks:
+  task-a:
+    description: "Task A"
+    commands:
+      - "/execute-a"
+    depends-on:
+      - task-c
+
+  task-b:
+    description: "Task B"
+    commands:
+      - "/execute-b"
+    depends-on:
+      - task-a
+
+  task-c:
+    description: "Task C"
+    commands:
+      - "/execute-c"
+    depends-on:
+      - task-b

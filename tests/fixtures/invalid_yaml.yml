@@ -1,0 +1,16 @@
+# Invalid YAML for error testing
+# Missing colons and malformed structure
+
+version: "1.0"
+description Invalid YAML syntax
+
+tasks
+  task-a
+    description "Task A"
+    commands
+      - "/execute"
+
+  task-b
+    description "Task B"
+    depends-on
+      task-a

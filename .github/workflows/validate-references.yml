@@ -1,0 +1,120 @@
+name: Reference Validation
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - main
+    paths:
+      - '.claude/**'
+      - 'CLAUDE.md'
+      - 'install.sh'
+      - 'validate-references.sh'
+  pull_request:
+    branches:
+      - master
+      - develop
+      - main
+    paths:
+      - '.claude/**'
+      - 'CLAUDE.md'
+      - 'install.sh'
+      - 'validate-references.sh'
+
+jobs:
+  validate-references:
+    name: Validate @include References
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check bash version
+        run: bash --version
+
+      - name: Make validator executable
+        run: chmod +x validate-references.sh
+
+      - name: Run reference validation
+        id: validate
+        run: |
+          bash validate-references.sh --report > validation-report.txt 2>&1
+          exit_code=$?
+          cat validation-report.txt
+          exit $exit_code
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report
+          path: validation-report.txt
+          retention-days: 30
+
+      - name: Validation passed
+        if: success()
+        run: |
+          echo "✅ Reference validation passed"
+          echo "All @include references are valid"
+
+      - name: Validation failed
+        if: failure()
+        run: |
+          echo "❌ Reference validation failed"
+          echo "See validation-report.txt for details"
+          exit 1
+
+  comment-on-pr:
+    name: Comment on PR
+    runs-on: ubuntu-latest
+    needs: validate-references
+    if: github.event_name == 'pull_request' && failure()
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run validation for comment
+        id: validate
+        run: |
+          bash validate-references.sh --report > validation-report.txt 2>&1 || true
+          cat validation-report.txt
+
+      - name: Comment validation results
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('validation-report.txt', 'utf8');
+
+            const comment = `## ❌ Reference Validation Failed
+
+Please review the validation report below and fix the issues before merging.
+
+\`\`\`
+${report}
+\`\`\`
+
+**Next Steps:**
+1. Review the error messages above
+2. Fix the configuration errors
+3. Push changes to update this PR
+4. Validation will re-run automatically
+
+For more information, see [Reference Validation Guide](../docs/reference-validation.md)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

@@ -1,0 +1,134 @@
+# Sample Task Workflow for SuperClaude v2.1
+# Demonstrates task dependency graph features
+
+version: "1.0"
+description: "Complete code review and quality analysis workflow"
+
+metadata:
+  author: "SuperClaude Team"
+  created: "2026-05-11"
+  updated: "2026-05-11"
+
+tasks:
+  # Phase 1: Initial Analysis
+  analyze-code:
+    description: "Analyze code quality and complexity"
+    commands:
+      - "/analyze --code --think"
+    tags: ["analysis", "quality"]
+    timeout: 300
+
+  check-dependencies:
+    description: "Check for dependency vulnerabilities"
+    commands:
+      - "/scan --dependencies"
+    tags: ["security", "dependencies"]
+    timeout: 120
+
+  # Phase 2: Testing (parallel after analysis)
+  unit-tests:
+    description: "Run unit test suite"
+    commands:
+      - "/test --unit --coverage"
+    depends-on:
+      - analyze-code
+    tags: ["testing", "quality"]
+    timeout: 600
+    retry: 1
+
+  integration-tests:
+    description: "Run integration tests"
+    commands:
+      - "/test --integration"
+    depends-on:
+      - analyze-code
+    tags: ["testing", "quality"]
+    timeout: 900
+    retry: 1
+
+  security-scan:
+    description: "Run security vulnerability scan"
+    commands:
+      - "/scan --security --strict"
+    depends-on:
+      - check-dependencies
+    tags: ["security", "compliance"]
+    timeout: 300
+
+  # Phase 3: Code Review (after tests pass)
+  quality-review:
+    description: "Comprehensive code quality review"
+    commands:
+      - "/review --quality --evidence"
+    depends-on:
+      - unit-tests
+    tags: ["review", "quality"]
+    timeout: 300
+
+  performance-analysis:
+    description: "Profile and analyze performance"
+    commands:
+      - "/analyze --profile --think"
+    depends-on:
+      - integration-tests
+    tags: ["analysis", "performance"]
+    timeout: 400
+
+  # Phase 4: Documentation
+  generate-documentation:
+    description: "Generate comprehensive documentation"
+    commands:
+      - "/document --comprehensive"
+    depends-on:
+      - quality-review
+      - performance-analysis
+    tags: ["documentation"]
+    timeout: 200
+
+  # Phase 5: Final Reporting (optional)
+  create-summary:
+    description: "Create project summary report"
+    commands:
+      - "echo 'Generating summary report...'"
+    depends-on:
+      - generate-documentation
+    tags: ["reporting"]
+    timeout: 120
+    optional: true
+
+---
+
+# This workflow demonstrates:
+# 1. Sequential dependencies (task1 -> task2 -> task3)
+# 2. Parallel execution (unit-tests, integration-tests, security-scan all depend on initial phase)
+# 3. Convergence (generate-documentation waits for multiple parallel tasks)
+# 4. Optional tasks (create-summary is optional)
+
+# Execution Plan:
+#
+# Phase 1 (Sequential - 0min):
+#   analyze-code (300s)
+#   check-dependencies (120s)
+#   → Combined: 420s (7 min)
+#
+# Phase 2 (Parallel - 7min):
+#   unit-tests (600s)
+#   integration-tests (900s)
+#   security-scan (300s)
+#   → Completed by: 900s (15 min, limited by integration-tests)
+#
+# Phase 3 (Parallel - 22min):
+#   quality-review (300s)
+#   performance-analysis (400s)
+#   → Completed by: 400s (6.7 min, limited by performance-analysis)
+#
+# Phase 4 (Sequential - 28.7min):
+#   generate-documentation (200s)
+#   → Completed by: 200s (3.3 min)
+#
+# Phase 5 (Optional - 32min):
+#   create-summary (120s)
+#   → Completed by: 120s (2 min)
+#
+# TOTAL TIME: 32 minutes (32 * 60 = 1920 seconds)
+# With parallelization: 33% faster than sequential execution

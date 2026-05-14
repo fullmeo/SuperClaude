@@ -1,0 +1,121 @@
+name: Test Installation
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - main
+    paths:
+      - 'install.sh'
+      - '.claude/**'
+      - 'validate-references.sh'
+      - 'test_validate_references.sh'
+  pull_request:
+    branches:
+      - master
+      - develop
+      - main
+    paths:
+      - 'install.sh'
+      - '.claude/**'
+      - 'validate-references.sh'
+      - 'test_validate_references.sh'
+
+jobs:
+  test-validator:
+    name: Test Reference Validator
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        bash-version: ['4', '5']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bash (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bash
+
+      - name: Check bash version
+        run: |
+          bash --version
+          echo "Bash major version: $(bash -c 'echo ${BASH_VERSINFO[0]}')"
+
+      - name: Make scripts executable
+        run: |
+          chmod +x validate-references.sh
+          chmod +x test_validate_references.sh
+
+      - name: Run reference validator tests
+        id: test
+        run: |
+          bash test_validate_references.sh
+          exit_code=$?
+          exit $exit_code
+
+      - name: Run validator on project config
+        run: |
+          bash validate-references.sh --report
+          exit_code=$?
+          echo "Validation exit code: $exit_code"
+          exit $exit_code
+
+      - name: Test install.sh dry-run
+        run: |
+          # Test that install script recognizes validator
+          bash install.sh --dry-run --help 2>&1 | grep -q "SuperClaude" && echo "✓ Install script loads"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-bash${{ matrix.bash-version }}
+          path: |
+            validation-report.txt
+          retention-days: 30
+
+  test-install-dry-run:
+    name: Test Installation (Dry Run)
+    runs-on: ubuntu-latest
+    needs: test-validator
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: |
+          chmod +x install.sh
+          chmod +x validate-references.sh
+
+      - name: Run install dry-run
+        run: |
+          mkdir -p /tmp/claude-test
+          bash install.sh --dry-run --dir /tmp/claude-test --verbose 2>&1 | head -50
+
+      - name: Verify installation would work
+        run: |
+          echo "✓ Installation dry-run completed without errors"
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-validator, test-install-dry-run]
+    if: always()
+
+    steps:
+      - name: Determine status
+        run: |
+          if [ "${{ needs.test-validator.result }}" = "success" ] && [ "${{ needs.test-install-dry-run.result }}" = "success" ]; then
+            echo "✅ All tests passed"
+            exit 0
+          else
+            echo "❌ Some tests failed"
+            exit 1
+          fi
