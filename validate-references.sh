@@ -118,6 +118,11 @@ extract_references() {
         fi
         [[ "$in_fence" == true ]] && continue
 
+        # A line that is itself a comment (starts with #) is prose about
+        # the @include syntax, never a real directive -- real directives
+        # are always bare or embedded in a YAML value, never after "#".
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
         local stripped="${line//\`*\`/}"
         if [[ "$stripped" =~ @include[[:space:]]+([^#[:space:]]+)#([^[:space:]]+) ]]; then
             refs+=("${BASH_REMATCH[1]}#${BASH_REMATCH[2]}")

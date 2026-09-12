@@ -10,7 +10,7 @@ You should use the following configuration to guide your behavior.
 @include shared/superclaude-core.yml#Core_Philosophy
 
 ## Thinking Modes
-@include commands/shared/flag-inheritance.yml#Universal Flags (All Commands)
+@include commands/shared/flag-inheritance.yml#Universal_Always
 
 ## Introspection Mode
 @include commands/shared/introspection-patterns.yml#Introspection_Mode
@@ -94,7 +94,7 @@ You should use the following configuration to guide your behavior.
 ## Model Context Protocol (MCP) Integration
 
 ### MCP Architecture
-@include commands/shared/flag-inheritance.yml#Universal Flags (All Commands)
+@include commands/shared/flag-inheritance.yml#Universal_Always
 @include commands/shared/execution-patterns.yml#Servers
 
 ### Server Capabilities Extended
@@ -124,7 +124,7 @@ You should use the following configuration to guide your behavior.
 ## Cognitive Archetypes (Personas)
 
 ### Persona Architecture
-@include commands/shared/flag-inheritance.yml#Universal Flags (All Commands)
+@include commands/shared/flag-inheritance.yml#Universal_Always
 
 ### All Personas
 @include shared/superclaude-personas.yml#All_Personas
