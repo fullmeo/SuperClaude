@@ -122,11 +122,11 @@ test_file_validation() {
         "Accept valid .md extension"
 
     # Test: Invalid file paths
-    assert_failure \
+    assert_success \
         "[[ '/absolute/path.yml' =~ ^/ ]]" \
         "Reject absolute paths"
 
-    assert_failure \
+    assert_success \
         "[[ '../parent/file.yml' =~ \\.\\.  ]]" \
         "Reject path traversal"
 

@@ -112,7 +112,9 @@ extract_references() {
         fi
     done < "$file"
 
-    printf '%s\n' "${refs[@]}"
+    if [[ ${#refs[@]} -gt 0 ]]; then
+        printf '%s\n' "${refs[@]}"
+    fi
 }
 
 get_file_from_reference() {
@@ -184,7 +186,9 @@ get_yaml_sections() {
         fi
     done < "$file"
 
-    printf '%s\n' "${sections[@]}"
+    if [[ ${#sections[@]} -gt 0 ]]; then
+        printf '%s\n' "${sections[@]}"
+    fi
 }
 
 get_markdown_sections() {
@@ -205,7 +209,9 @@ get_markdown_sections() {
         fi
     done < "$file"
 
-    printf '%s\n' "${sections[@]}"
+    if [[ ${#sections[@]} -gt 0 ]]; then
+        printf '%s\n' "${sections[@]}"
+    fi
 }
 
 section_exists() {
