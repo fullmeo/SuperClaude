@@ -88,7 +88,7 @@ Progress Tracking:
 
 ## Recovery System
 
-@include shared/session-recovery.yml#Recovery_Patterns
+@include shared/recovery-state-patterns.yml#Session_Recovery_Patterns
 
 Session Recovery:
 - Auto-detect incomplete tasks

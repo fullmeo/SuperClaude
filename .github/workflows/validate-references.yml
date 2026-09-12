@@ -95,22 +95,23 @@ jobs:
             const fs = require('fs');
             const report = fs.readFileSync('validation-report.txt', 'utf8');
 
-            const comment = `## ❌ Reference Validation Failed
-
-Please review the validation report below and fix the issues before merging.
-
-\`\`\`
-${report}
-\`\`\`
-
-**Next Steps:**
-1. Review the error messages above
-2. Fix the configuration errors
-3. Push changes to update this PR
-4. Validation will re-run automatically
-
-For more information, see [Reference Validation Guide](../docs/reference-validation.md)
-            `;
+            const comment = [
+              '## ❌ Reference Validation Failed',
+              '',
+              'Please review the validation report below and fix the issues before merging.',
+              '',
+              '```',
+              report,
+              '```',
+              '',
+              '**Next Steps:**',
+              '1. Review the error messages above',
+              '2. Fix the configuration errors',
+              '3. Push changes to update this PR',
+              '4. Validation will re-run automatically',
+              '',
+              'For more information, see [Reference Validation Guide](../docs/reference-validation.md)'
+            ].join('\n');
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
