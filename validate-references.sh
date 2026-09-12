@@ -52,6 +52,7 @@ declare -A ERROR_TYPE=()
 declare -A ERROR_MSG=()
 declare -A ERROR_FILE=()
 declare -A ERROR_LINE=()
+declare -A ERROR_REF=()  # keyed the same as the above: "$file::$ref" -> raw ref text
 
 declare -A GRAPH=()  # Adjacency list for dependencies
 declare -A VISITED=()
@@ -105,14 +106,32 @@ extract_references() {
         return 1
     fi
 
-    # Match @include path/to/file.ext#SectionName
+    # Match @include path/to/file.ext#SectionName -- but skip fenced
+    # ```...``` blocks and inline `...` spans, since those are used
+    # throughout this repo to show the @include syntax as a documentation
+    # example (often a deliberately-broken one), not a real directive.
+    local in_fence=false
     while IFS= read -r line; do
-        if [[ "$line" =~ @include[[:space:]]+([^#[:space:]]+)#([^[:space:]]+) ]]; then
+        if [[ "$line" =~ ^[[:space:]]*'```' ]]; then
+            [[ "$in_fence" == true ]] && in_fence=false || in_fence=true
+            continue
+        fi
+        [[ "$in_fence" == true ]] && continue
+
+        # A line that is itself a comment (starts with #) is prose about
+        # the @include syntax, never a real directive -- real directives
+        # are always bare or embedded in a YAML value, never after "#".
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        local stripped="${line//\`*\`/}"
+        if [[ "$stripped" =~ @include[[:space:]]+([^#[:space:]]+)#([^[:space:]]+) ]]; then
             refs+=("${BASH_REMATCH[1]}#${BASH_REMATCH[2]}")
         fi
     done < "$file"
 
-    printf '%s\n' "${refs[@]}"
+    if [[ ${#refs[@]} -gt 0 ]]; then
+        printf '%s\n' "${refs[@]}"
+    fi
 }
 
 get_file_from_reference() {
@@ -123,6 +142,34 @@ get_file_from_reference() {
 get_section_from_reference() {
     local ref="$1"
     echo "${ref##*#}"
+}
+
+# ============================================================================
+# PATH RESOLUTION
+# ============================================================================
+
+# @include paths are written relative to the directory of the file that
+# contains them -- e.g. .claude/commands/analyze.md's "shared/foo.yml#Bar"
+# means .claude/commands/shared/foo.yml. The one exception is CLAUDE.md at
+# the repo root: it is the logical entry point for the .claude/ config tree,
+# and its authors write paths (e.g. "shared/core.yml") as if it lived at
+# .claude/CLAUDE.md, so it resolves relative to ".claude" instead of ".".
+resolve_ref_path() {
+    local referencing_file="$1"
+    local raw_ref_path="$2"
+    local base_dir
+
+    if [[ "$referencing_file" == "CLAUDE.md" ]]; then
+        base_dir=".claude"
+    else
+        base_dir="$(dirname "$referencing_file")"
+    fi
+
+    if [[ "$base_dir" == "." ]]; then
+        echo "$raw_ref_path"
+    else
+        echo "${base_dir}/${raw_ref_path}"
+    fi
 }
 
 # ============================================================================
@@ -176,15 +223,25 @@ get_yaml_sections() {
         return 1
     fi
 
-    # Extract top-level YAML keys (sections)
+    # Extract top-level YAML keys (sections), plus "## Name" comment
+    # headers -- this repo uses both as section anchors (e.g.
+    # universal-constants.yml's own "## Universal_Legend" comment,
+    # referenced elsewhere as "...universal-constants.yml#Universal_Legend",
+    # has no matching "Universal_Legend:" YAML key at all).
     while IFS= read -r line; do
         # Match top-level keys (no leading whitespace)
         if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*):[[:space:]]*$ ]]; then
             sections+=("${BASH_REMATCH[1]}")
+        elif [[ "$line" =~ ^##[[:space:]]+([^#].*)$ ]]; then
+            local header="${BASH_REMATCH[1]%"${BASH_REMATCH[1]##*[![:space:]]}"}"  # trim trailing space
+            header="${header// /_}"
+            sections+=("$header")
         fi
     done < "$file"
 
-    printf '%s\n' "${sections[@]}"
+    if [[ ${#sections[@]} -gt 0 ]]; then
+        printf '%s\n' "${sections[@]}"
+    fi
 }
 
 get_markdown_sections() {
@@ -205,7 +262,9 @@ get_markdown_sections() {
         fi
     done < "$file"
 
-    printf '%s\n' "${sections[@]}"
+    if [[ ${#sections[@]} -gt 0 ]]; then
+        printf '%s\n' "${sections[@]}"
+    fi
 }
 
 section_exists() {
@@ -307,7 +366,7 @@ dfs_visit() {
 
     local refs=("${GRAPH[$node]}")
     for ref in $refs; do
-        local ref_file=$(get_file_from_reference "$ref")
+        local ref_file=$(resolve_ref_path "$node" "$(get_file_from_reference "$ref")")
 
         if [[ ! -v VISITED["$ref_file"] ]]; then
             dfs_visit "$ref_file" $((depth + 1))
@@ -358,49 +417,61 @@ validate_references() {
 
             local ref_file=$(get_file_from_reference "$ref")
             local ref_section=$(get_section_from_reference "$ref")
+            local resolved_file=$(resolve_ref_path "$file" "$ref_file")
+            # Same ref text (e.g. "shared/universal-constants.yml#Universal_Legend")
+            # is included by dozens of different files, so it can't be the sole
+            # key -- pair it with the referencing file so each occurrence gets
+            # its own slot instead of overwriting another file's error.
+            local key="${file}::${ref}"
 
-            log_verbose "Validating: $ref (in $file)"
+            log_verbose "Validating: $ref (in $file, resolves to $resolved_file)"
 
-            # 1. Check file path validity
+            # 1. Check file path validity (on the raw, as-written path --
+            # this is what an author actually typed, so that's what the
+            # absolute-path/traversal checks must judge)
             if ! is_valid_file_path "$ref_file"; then
-                ERROR_TYPE["$ref"]="invalid_path"
-                ERROR_MSG["$ref"]="Invalid file path: $ref_file"
-                ERROR_FILE["$ref"]="$file"
-                ERROR_LINE["$ref"]="?"
-                ERROR_REFS+=("$ref")
+                ERROR_TYPE["$key"]="invalid_path"
+                ERROR_MSG["$key"]="Invalid file path: $ref_file"
+                ERROR_FILE["$key"]="$file"
+                ERROR_LINE["$key"]="?"
+                ERROR_REF["$key"]="$ref"
+                ERROR_REFS+=("$key")
                 ((ERROR_COUNT++))
                 continue
             fi
 
-            # 2. Check file exists
-            if ! file_exists_and_readable "$ref_file"; then
-                ERROR_TYPE["$ref"]="missing_file"
-                ERROR_MSG["$ref"]="File not found: $ref_file"
-                ERROR_FILE["$ref"]="$file"
-                ERROR_LINE["$ref"]="?"
-                ERROR_REFS+=("$ref")
+            # 2. Check file exists (on the resolved path)
+            if ! file_exists_and_readable "$resolved_file"; then
+                ERROR_TYPE["$key"]="missing_file"
+                ERROR_MSG["$key"]="File not found: $resolved_file (from '$ref_file')"
+                ERROR_FILE["$key"]="$file"
+                ERROR_LINE["$key"]="?"
+                ERROR_REF["$key"]="$ref"
+                ERROR_REFS+=("$key")
                 ((ERROR_COUNT++))
                 continue
             fi
 
             # 3. Check YAML syntax
-            if ! validate_yaml_syntax "$ref_file"; then
-                ERROR_TYPE["$ref"]="invalid_yaml"
-                ERROR_MSG["$ref"]="Invalid YAML syntax in: $ref_file"
-                ERROR_FILE["$ref"]="$file"
-                ERROR_LINE["$ref"]="?"
-                ERROR_REFS+=("$ref")
+            if ! validate_yaml_syntax "$resolved_file"; then
+                ERROR_TYPE["$key"]="invalid_yaml"
+                ERROR_MSG["$key"]="Invalid YAML syntax in: $resolved_file"
+                ERROR_FILE["$key"]="$file"
+                ERROR_LINE["$key"]="?"
+                ERROR_REF["$key"]="$ref"
+                ERROR_REFS+=("$key")
                 ((ERROR_COUNT++))
                 continue
             fi
 
             # 4. Check section exists
-            if ! section_exists "$ref_file" "$ref_section"; then
-                ERROR_TYPE["$ref"]="missing_section"
-                ERROR_MSG["$ref"]="Section [$ref_section] not found in: $ref_file"
-                ERROR_FILE["$ref"]="$file"
-                ERROR_LINE["$ref"]="?"
-                ERROR_REFS+=("$ref")
+            if ! section_exists "$resolved_file" "$ref_section"; then
+                ERROR_TYPE["$key"]="missing_section"
+                ERROR_MSG["$key"]="Section [$ref_section] not found in: $resolved_file"
+                ERROR_FILE["$key"]="$file"
+                ERROR_LINE["$key"]="?"
+                ERROR_REF["$key"]="$ref"
+                ERROR_REFS+=("$key")
                 ((ERROR_COUNT++))
                 continue
             fi
@@ -492,13 +563,14 @@ generate_report() {
         echo ""
 
         local idx=1
-        for ref in "${ERROR_REFS[@]}"; do
-            local error_type="${ERROR_TYPE[$ref]}"
-            local error_msg="${ERROR_MSG[$ref]}"
-            local error_file="${ERROR_FILE[$ref]}"
+        for key in "${ERROR_REFS[@]}"; do
+            local error_type="${ERROR_TYPE[$key]}"
+            local error_msg="${ERROR_MSG[$key]}"
+            local error_file="${ERROR_FILE[$key]}"
+            local error_ref="${ERROR_REF[$key]}"
 
             echo -e "${RED}$idx. ${error_type^^}${NC}"
-            echo "   Reference: @include $ref"
+            echo "   Reference: @include $error_ref"
             echo "   Location: $error_file"
             echo "   Issue: $error_msg"
             echo ""
