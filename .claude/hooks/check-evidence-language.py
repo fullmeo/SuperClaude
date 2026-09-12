@@ -33,9 +33,13 @@ def load_prohibited_terms() -> list[str]:
 
 
 def strip_code(text: str) -> str:
-    """Drop fenced/inline code so identifiers like `isSecure()` don't trigger."""
+    """Drop fenced/inline code and quoted spans so identifiers like
+    `isSecure()` or a quoted term like "optimal" (mentioned, not
+    asserted) don't trigger a false positive."""
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"`[^`]*`", " ", text)
+    text = re.sub(r'"[^"]*"', " ", text)
+    text = re.sub(r"«[^»]*»", " ", text)
     return text
 
 
